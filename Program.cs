@@ -1,5 +1,14 @@
-var builder = WebApplication.CreateBuilder(args);
+using Microsoft.EntityFrameworkCore;
 
+var builder = WebApplication.CreateBuilder(args);
+// agregando contexto de base de datos
+
+var connectionString = "Server=localhost;Integrated security=SSPI; Database=Animales";
+
+//registrando el db context
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+options.UseSqlServer(connectionString));
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -16,93 +25,96 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-List<Animal> perros = new List<Animal>();
 
-var perro = new Animal
+
+
+
+
+
+
+app.MapGet("/perritos", (ApplicationDbContext db) =>
 {
-    name = "Ambar",
-    age = 5,
-    patas = 4
-};
-var perro2 = new Animal
-{
-    name = "Pichicho",
-    age = 2,
-    patas = 4,
-};
+    var animales = db.Animals.ToList();
+    IEnumerable<Animal> perros = animales.Where(animal => animal.Tipo == "Perro");
 
-perros.Add(perro2);
-perros.Add(perro);
-
-Console.WriteLine(perros);
-
-app.MapGet("/perritos", () =>
-{
-    
-    
-    return perros;
+    return Results.Ok(perros);
 
 }).WithName("GetPerros");
 
-app.MapGet("/perrito/{id}", (int id) =>
+app.MapGet("/perrito/{id}", (int id, ApplicationDbContext db) =>
 {
-    if (id < perros.Count)
+    var dbDog = db.Animals.FirstOrDefault(x => x.Id == id);
+    if (dbDog == null)
     {
-        return perros[id];
+        return Results.NotFound("Perro no existe");
     }
-    else { return null; }
-    
-    
+    return Results.Ok(dbDog);
 
 }).WithName("GetPerro");
 
-app.MapPost("/crearPerrito", (string nombre, int patas, int age) =>
+app.MapPost("/crearPerrito", (string nombre, int patas, int age, ApplicationDbContext db) =>
 {
     var perro = new Animal
-    {
-        name = nombre,
-        patas = patas,
-        age = age,
+    {   Tipo = "Perro",
+        Name = nombre,
+        Patas = patas,
+        Age = age,
     };
-    perros.Add(perro);
+    db.Animals.Add(perro);
+    db.SaveChanges();
 
-    return perro;
+    return Results.Ok(perro);
 }).WithName("PostPero");
 
-app.MapPut("/actualizarPerrito", (string name, int patas, int age, int id) =>
+app.MapPut("/actualizarPerrito", (string name, int patas, int age, int id, ApplicationDbContext db) =>
 {
-    if(id > perros.Count)
+    var dbDog = db.Animals.FirstOrDefault(x => x.Id == id);
+    if(dbDog == null)
     {
-        return null;
+        return Results.NotFound("El perro no existe");
     }
-    else
-    {
-        perros[id].name = name;
-        perros[id].age = age;
-        perros[id].patas = patas;
+    dbDog.Name = name;
+    dbDog.Age = age;
+    dbDog.Patas = patas;
+    dbDog.Tipo = "Perro";
+    db.SaveChanges();
+    return Results.Ok(dbDog);
 
-        return perros[id];
-       
-    }
 }).WithName("ActualizarPerro");
 
-app.MapDelete("/eliminarPerrito/{id}", (int id) =>
+app.MapDelete("/eliminarPerrito", (int id, ApplicationDbContext db) =>
 {
-    perros.Remove(perros[id]);
-    return perros;
+    var dbDog = db.Animals.FirstOrDefault(x => x.Id == id);
+
+    if(dbDog == null)
+    {
+        return Results.NotFound("El perro no existe");
+    }
+    db.Remove(dbDog);
+    db.SaveChanges();
+    return Results.Ok("El perro fue eliminado");
 
 }).WithName("EliminarPerro");
 
 app.Run();
 
-internal record WeatherForecast(DateTime Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+ 
+
 public record Animal
+{   public int Id { get; set; } 
+    public string Name { get; set; }
+    public int Age { get; set; }    
+    public int Patas { get; set; }
+    public string Tipo { get; set; }
+
+}
+public class ApplicationDbContext : DbContext
 {
-    public string name { get; set; }
-    public int age { get; set; }    
-    public int patas { get; set; }
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) :base(options)
+    {
+
+    }
+
+    public DbSet<Animal> Animals { get; set; }
 
 }
